@@ -402,7 +402,7 @@ static void on_hvx(const ble_gattc_evt_t * const p_ble_gattc_evt)
             p_ble_gattc_evt->params.hvx.handle <= m_hrm_cccd_handle) // Heart rate measurement.
     {
         // We know the heart rate reading is encoded as 2 bytes [flag, value].
-        printf("Received heart rate measurement: %d\n", p_ble_gattc_evt->params.hvx.data[1]);
+        printf("Received heart rate measurement: %d\n", p_ble_gattc_evt->params.hvx.data[146]);
     }
     else // Unknown data.
     {

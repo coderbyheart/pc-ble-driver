@@ -54,7 +54,8 @@
 #if NRF_SD_BLE_API <= 3
 #define MAX_HRM_LEN (BLE_L2CAP_MTU_DEF - OPCODE_LENGTH - HANDLE_LENGTH) /**< Maximum size of a transmitted Heart Rate Measurement. */
 #else
-#define MAX_HRM_LEN (BLE_EVT_LEN_MAX(GATT_MTU_SIZE_DEFAULT) - OPCODE_LENGTH - HANDLE_LENGTH)
+// #define MAX_HRM_LEN (BLE_EVT_LEN_MAX(GATT_MTU_SIZE_DEFAULT) - OPCODE_LENGTH - HANDLE_LENGTH)
+#define MAX_HRM_LEN (BLE_EVT_LEN_MAX(200) - OPCODE_LENGTH - HANDLE_LENGTH)
 #endif
 
 #define BLE_UUID_HEART_RATE_SERVICE          0x180D /**< Heart Rate service UUID. */
@@ -196,7 +197,8 @@ static void ble_evt_dispatch(adapter_t * adapter, ble_evt_t * p_ble_evt)
 
 #if NRF_SD_BLE_API >= 3
         case BLE_GATTS_EVT_EXCHANGE_MTU_REQUEST:
-            err_code = sd_ble_gatts_exchange_mtu_reply(adapter, m_connection_handle,
+            err_code = sd_ble_gatts_exchange_mtu_reply(adapter,
+                                                       m_connection_handle,
                                                        p_ble_evt->evt.gatts_evt.params.exchange_mtu_request.client_rx_mtu);
 
             if (err_code != NRF_SUCCESS)
@@ -426,7 +428,11 @@ static uint8_t heart_rate_measurement_encode(uint8_t * encoded_hrm, uint8_t hear
     encoded_hrm[0] = flags;
     encoded_hrm[1] = heart_rate;
 
-    return 2;
+    for ( uint8_t i = 2; i < 200 ; i++ ) {
+        encoded_hrm[i] = heart_rate;
+    }
+
+    return 200;
 }
 
 /**@brief Function for adding the Heart Rate Measurement characteristic.
