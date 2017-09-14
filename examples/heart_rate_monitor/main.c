@@ -197,7 +197,7 @@ static void ble_evt_dispatch(adapter_t * adapter, ble_evt_t * p_ble_evt)
 #if NRF_SD_BLE_API >= 3
         case BLE_GATTS_EVT_EXCHANGE_MTU_REQUEST:
             err_code = sd_ble_gatts_exchange_mtu_reply(adapter, m_connection_handle,
-                                                       GATT_MTU_SIZE_DEFAULT);
+                                                       p_ble_evt->evt.gatts_evt.params.exchange_mtu_request.client_rx_mtu);
 
             if (err_code != NRF_SUCCESS)
             {
@@ -397,7 +397,7 @@ static uint32_t advertising_start()
 #if NRF_SD_BLE_API <= 3
     error_code = sd_ble_gap_adv_start(m_adapter, &adv_params);
 #else
-    error_code = sd_ble_gap_adv_start(m_adapter, &adv_params, BLE_CONN_CFG_TAG_DEFAULT);
+    error_code = sd_ble_gap_adv_start(m_adapter, &adv_params, m_config_id);
 #endif
 
     if (error_code != NRF_SUCCESS)

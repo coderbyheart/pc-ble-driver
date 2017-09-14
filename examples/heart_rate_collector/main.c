@@ -177,6 +177,7 @@ static void on_connected(const ble_gap_evt_t * const p_ble_gap_evt)
     m_connection_handle = p_ble_gap_evt->conn_handle;
     m_connection_is_in_progress = false;
 
+
     service_discovery_start();
 }
 
@@ -366,6 +367,11 @@ static void on_descriptor_discovery_response(const ble_gattc_evt_t * const p_ble
             fflush(stdout);
         }
     }
+
+    #if NRF_SD_BLE_API >= 5
+        sd_ble_gattc_exchange_mtu_request(m_adapter, m_connection_handle, 150);
+    #endif
+
 }
 
 /**@brief Function called on BLE_GATTC_EVT_WRITE_RSP event.
