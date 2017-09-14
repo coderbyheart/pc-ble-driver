@@ -55,7 +55,7 @@
 #define MAX_HRM_LEN (BLE_L2CAP_MTU_DEF - OPCODE_LENGTH - HANDLE_LENGTH) /**< Maximum size of a transmitted Heart Rate Measurement. */
 #else
 // #define MAX_HRM_LEN (BLE_EVT_LEN_MAX(GATT_MTU_SIZE_DEFAULT) - OPCODE_LENGTH - HANDLE_LENGTH)
-#define MAX_HRM_LEN (BLE_EVT_LEN_MAX(2048) - OPCODE_LENGTH - HANDLE_LENGTH)
+#define MAX_HRM_LEN (BLE_EVT_LEN_MAX(300) - OPCODE_LENGTH - HANDLE_LENGTH)
 #endif
 
 #define BLE_UUID_HEART_RATE_SERVICE          0x180D /**< Heart Rate service UUID. */
@@ -222,13 +222,18 @@ static void ble_evt_dispatch(adapter_t * adapter, ble_evt_t * p_ble_evt)
 
 #if NRF_SD_BLE_API >= 5
         case BLE_GAP_EVT_DATA_LENGTH_UPDATE_REQUEST:
-            sd_ble_gap_data_length_update(m_adapter, m_connection_handle, NULL, NULL);
+
             printf("BLE_GAP_EVT_DATA_LENGTH_UPDATE_REQUEST.\n");
+            printf("max_tx_octets: %d\n", p_ble_evt->evt.gap_evt.params.data_length_update.effective_params.max_tx_octets);
+            printf("max_rx_octets: %d\n", p_ble_evt->evt.gap_evt.params.data_length_update.effective_params.max_rx_octets);
+            sd_ble_gap_data_length_update(m_adapter, m_connection_handle, NULL, NULL);
             fflush(stdout);
             break;
 
         case BLE_GAP_EVT_DATA_LENGTH_UPDATE:
             printf("BLE_GAP_EVT_DATA_LENGTH_UPDATE.\n");
+            printf("max_tx_octets: %d\n", p_ble_evt->evt.gap_evt.params.data_length_update.effective_params.max_tx_octets);
+            printf("max_rx_octets: %d\n", p_ble_evt->evt.gap_evt.params.data_length_update.effective_params.max_rx_octets);
             break;
 #endif
 
@@ -329,7 +334,7 @@ uint32_t ble_cfg_set(uint8_t conn_cfg_tag)
 
     memset(&ble_cfg, 0x00, sizeof(ble_cfg));
     ble_cfg.conn_cfg.conn_cfg_tag                 = conn_cfg_tag;
-    ble_cfg.conn_cfg.params.gatt_conn_cfg.att_mtu = 250;
+    ble_cfg.conn_cfg.params.gatt_conn_cfg.att_mtu = 300;
 
     error_code = sd_ble_cfg_set(m_adapter, BLE_CONN_CFG_GATT, &ble_cfg, ram_start);
     if (error_code != NRF_SUCCESS)
@@ -433,18 +438,18 @@ static uint32_t advertising_start()
  *
  * @return      Size of encoded data.
  */
-static uint32_t heart_rate_measurement_encode(uint8_t * encoded_hrm, uint8_t heart_rate)
+static uint16_t heart_rate_measurement_encode(uint8_t * encoded_hrm, uint8_t heart_rate)
 {
     uint8_t flags = 0;
 
     encoded_hrm[0] = flags;
     encoded_hrm[1] = heart_rate;
 
-    for ( uint8_t i = 2; i < 2048 ; i++ ) {
+    for ( uint16_t i = 2; i < 300 ; i++ ) {
         encoded_hrm[i] = heart_rate;
     }
 
-    return 2048;
+    return 600;
 }
 
 /**@brief Function for adding the Heart Rate Measurement characteristic.
@@ -578,7 +583,7 @@ static uint32_t heart_rate_measurement_send()
     uint8_t                encoded_hrm[MAX_HRM_LEN];
     uint16_t               hvx_length;
     ble_gatts_hvx_params_t hvx_params;
-    uint8_t                length;
+    uint16_t                length;
 
     heart_rate_generate();
 
