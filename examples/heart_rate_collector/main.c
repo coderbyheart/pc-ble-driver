@@ -369,7 +369,7 @@ static void on_descriptor_discovery_response(const ble_gattc_evt_t * const p_ble
     }
 
     #if NRF_SD_BLE_API >= 4
-        sd_ble_gap_data_length_update(m_adapter, m_connection_handle, NULL, NULL);
+        sd_ble_gattc_exchange_mtu_request(m_adapter, m_connection_handle, 400);
     #endif
 
 }
@@ -387,7 +387,6 @@ static void on_data_length_update_response(const ble_gap_evt_t * const p_ble_gap
     printf("max_tx_octets: %d\n", p_ble_gap_evt->params.data_length_update.effective_params.max_tx_octets);
     printf("max_rx_octets: %d\n", p_ble_gap_evt->params.data_length_update.effective_params.max_rx_octets);
     fflush(stdout);
-    sd_ble_gattc_exchange_mtu_request(m_adapter, m_connection_handle, 300);
 }
 #endif
 
@@ -421,7 +420,8 @@ static void on_hvx(const ble_gattc_evt_t * const p_ble_gattc_evt)
             p_ble_gattc_evt->params.hvx.handle <= m_hrm_cccd_handle) // Heart rate measurement.
     {
         // We know the heart rate reading is encoded as 2 bytes [flag, value].
-        printf("Received heart rate measurement: %d\n", p_ble_gattc_evt->params.hvx.data[296]);
+        printf("Received heart rate measurement length: %d\n", p_ble_gattc_evt->params.hvx.len);
+        printf("Received heart rate measurement: %d\n", p_ble_gattc_evt->params.hvx.data[1]);
     }
     else // Unknown data.
     {
@@ -486,6 +486,10 @@ static void on_exchange_mtu_response(const ble_gattc_evt_t * const p_ble_gattc_e
 
     printf("MTU response received. New ATT_MTU is %d\n", server_rx_mtu);
     fflush(stdout);
+
+    #if NRF_SD_BLE_API >= 5
+        sd_ble_gap_data_length_update(m_adapter, m_connection_handle, NULL, NULL);
+    #endif
 }
 #endif
 
@@ -701,7 +705,7 @@ uint32_t ble_cfg_set(uint8_t conn_cfg_tag)
 
     memset(&ble_cfg, 0x00, sizeof(ble_cfg));
     ble_cfg.conn_cfg.conn_cfg_tag                 = conn_cfg_tag;
-    ble_cfg.conn_cfg.params.gatt_conn_cfg.att_mtu = 2048;
+    ble_cfg.conn_cfg.params.gatt_conn_cfg.att_mtu = 2500;
 
     error_code = sd_ble_cfg_set(m_adapter, BLE_CONN_CFG_GATT, &ble_cfg, ram_start);
     if (error_code != NRF_SUCCESS)

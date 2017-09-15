@@ -55,7 +55,7 @@
 #define MAX_HRM_LEN (BLE_L2CAP_MTU_DEF - OPCODE_LENGTH - HANDLE_LENGTH) /**< Maximum size of a transmitted Heart Rate Measurement. */
 #else
 // #define MAX_HRM_LEN (BLE_EVT_LEN_MAX(GATT_MTU_SIZE_DEFAULT) - OPCODE_LENGTH - HANDLE_LENGTH)
-#define MAX_HRM_LEN (BLE_EVT_LEN_MAX(300) - OPCODE_LENGTH - HANDLE_LENGTH)
+#define MAX_HRM_LEN (BLE_EVT_LEN_MAX(512) - OPCODE_LENGTH - HANDLE_LENGTH)
 #endif
 
 #define BLE_UUID_HEART_RATE_SERVICE          0x180D /**< Heart Rate service UUID. */
@@ -334,7 +334,7 @@ uint32_t ble_cfg_set(uint8_t conn_cfg_tag)
 
     memset(&ble_cfg, 0x00, sizeof(ble_cfg));
     ble_cfg.conn_cfg.conn_cfg_tag                 = conn_cfg_tag;
-    ble_cfg.conn_cfg.params.gatt_conn_cfg.att_mtu = 300;
+    ble_cfg.conn_cfg.params.gatt_conn_cfg.att_mtu = 2500;
 
     error_code = sd_ble_cfg_set(m_adapter, BLE_CONN_CFG_GATT, &ble_cfg, ram_start);
     if (error_code != NRF_SUCCESS)
@@ -445,11 +445,11 @@ static uint16_t heart_rate_measurement_encode(uint8_t * encoded_hrm, uint8_t hea
     encoded_hrm[0] = flags;
     encoded_hrm[1] = heart_rate;
 
-    for ( uint16_t i = 2; i < 300 ; i++ ) {
+    for ( uint16_t i = 2; i < 512 ; i++ ) {
         encoded_hrm[i] = heart_rate;
     }
 
-    return 600;
+    return 512;
 }
 
 /**@brief Function for adding the Heart Rate Measurement characteristic.
@@ -501,7 +501,8 @@ static uint32_t characteristic_init()
     attr_char_value.p_attr_md    = &attr_md;
     attr_char_value.init_len     = attr_char_value_init_len;
     attr_char_value.init_offs    = 0;
-    attr_char_value.max_len      = MAX_HRM_LEN;
+    // attr_char_value.max_len      = MAX_HRM_LEN;
+    attr_char_value.max_len      = 512;
     attr_char_value.p_value      = encoded_initial_hrm;
 
     error_code = sd_ble_gatts_characteristic_add(m_adapter, m_heart_rate_service_handle,
