@@ -66,7 +66,7 @@
 #define HEART_RATE_LIMIT    190
 
 #define BUFFER_SIZE 30           /**< Sufficiently large buffer for the advertising data.  */
-#define DEVICE_NAME "Nordic_HRM" /**< Name device advertises as over Bluetooth. */
+#define DEVICE_NAME "Nordic_CHUN" /**< Name device advertises as over Bluetooth. */
 
 #ifndef GATT_MTU_SIZE_DEFAULT
 #define GATT_MTU_SIZE_DEFAULT BLE_GATT_ATT_MTU_DEFAULT
@@ -187,12 +187,14 @@ static void ble_evt_dispatch(adapter_t * adapter, ble_evt_t * p_ble_evt)
             break;
 
         case BLE_GATTS_EVT_WRITE:
+            printf("write_data:%d\n", p_ble_evt->evt.gatts_evt.params.write.data[20]);
             if (p_ble_evt->evt.gatts_evt.params.write.handle ==
                     m_heart_rate_measurement_handle.cccd_handle)
             {
-                uint8_t write_data = p_ble_evt->evt.gatts_evt.params.write.data[0];
+                uint8_t write_data = p_ble_evt->evt.gatts_evt.params.write.data[3];
                 m_send_notifications = write_data == BLE_GATT_HVX_NOTIFICATION;
             }
+
             break;
 
 #if NRF_SD_BLE_API >= 3
@@ -235,6 +237,31 @@ static void ble_evt_dispatch(adapter_t * adapter, ble_evt_t * p_ble_evt)
             printf("max_tx_octets: %d\n", p_ble_evt->evt.gap_evt.params.data_length_update.effective_params.max_tx_octets);
             printf("max_rx_octets: %d\n", p_ble_evt->evt.gap_evt.params.data_length_update.effective_params.max_rx_octets);
             break;
+
+        case BLE_GAP_EVT_PHY_UPDATE_REQUEST:
+            printf("BLE_GAP_EVT_PHY_UPDATE_REQUEST.\n");
+            printf("BLE_GAP_EVT_PHY_UPDATE.\n");
+            printf("status %d\n", p_ble_evt->evt.gap_evt.params.phy_update.status);
+
+            printf("tx_phy: %d\n", p_ble_evt->evt.gap_evt.params.phy_update.tx_phy);
+            printf("rx_phy: %d\n", p_ble_evt->evt.gap_evt.params.phy_update.rx_phy);
+
+            ble_gap_phys_t phys = {BLE_GAP_PHY_1MBPS, BLE_GAP_PHY_1MBPS};
+            sd_ble_gap_phy_update(m_adapter, m_connection_handle, &phys);
+            break;
+
+        case BLE_GAP_EVT_PHY_UPDATE:
+            printf("BLE_GAP_EVT_PHY_UPDATE.\n");
+            if (p_ble_evt->evt.gap_evt.params.phy_update.status == NRF_SUCCESS)
+            {
+                printf("tx_phy: %d\n", p_ble_evt->evt.gap_evt.params.phy_update.tx_phy);
+                printf("rx_phy: %d\n", p_ble_evt->evt.gap_evt.params.phy_update.rx_phy);
+            }
+
+            break;
+
+
+
 #endif
 
         default:
@@ -442,14 +469,21 @@ static uint16_t heart_rate_measurement_encode(uint8_t * encoded_hrm, uint8_t hea
 {
     uint8_t flags = 0;
 
+    SYSTEMTIME st;
+    GetSystemTime(&st);
+    printf("%d.%d%d\n", st.wSecond, st.wMilliseconds/10, st.wMilliseconds%10);
+
     encoded_hrm[0] = flags;
     encoded_hrm[1] = heart_rate;
+    encoded_hrm[2] = st.wSecond;
+    encoded_hrm[3] = st.wMilliseconds/10;
+    encoded_hrm[4] = st.wMilliseconds%10;
 
-    for ( uint16_t i = 2; i < 512 ; i++ ) {
-        encoded_hrm[i] = heart_rate;
+    for ( uint16_t i = 0; i < 250 ; i++ ) {
+        encoded_hrm[i] = 66;
     }
 
-    return 512;
+    return 250;
 }
 
 /**@brief Function for adding the Heart Rate Measurement characteristic.
@@ -475,11 +509,13 @@ static uint32_t characteristic_init()
 
     memset(&char_md, 0, sizeof(char_md));
 
-    char_md.char_props.notify = 1;
+    // char_md.char_props.notify = 1;
+    char_md.char_props.read   = 1;
+    char_md.char_props.write  = 1;
     char_md.p_char_user_desc  = NULL;
     char_md.p_char_pf         = NULL;
     char_md.p_user_desc_md    = NULL;
-    char_md.p_cccd_md         = &cccd_md;
+    // char_md.p_cccd_md         = &cccd_md;
     char_md.p_sccd_md         = NULL;
 
     BLE_UUID_BLE_ASSIGN(ble_uuid, BLE_UUID_HEART_RATE_MEASUREMENT_CHAR);
@@ -496,6 +532,7 @@ static uint32_t characteristic_init()
     memset(&attr_char_value, 0, sizeof(attr_char_value));
 
     attr_char_value_init_len = heart_rate_measurement_encode(encoded_initial_hrm, 0);
+    printf("init_len: %d\n", attr_char_value_init_len);
 
     attr_char_value.p_uuid       = &ble_uuid;
     attr_char_value.p_attr_md    = &attr_md;
