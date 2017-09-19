@@ -26,6 +26,13 @@
 #include <string.h>
 
 #ifdef _WIN32
+#include <windows.h>
+#else
+#include <unistd.h>
+#define Sleep(x) usleep((x)*1000)
+#endif
+
+#ifdef _WIN32
 #define UART_PORT_NAME "COM1"
 #define BAUD_RATE 1000000 /**< The baud rate to be used for serial communication with nRF5 device. */
 #endif
@@ -57,7 +64,7 @@ enum
 #define SLAVE_LATENCY                   0                                /**< Slave Latency in number of connection events. */
 #define CONNECTION_SUPERVISION_TIMEOUT  MSEC_TO_UNITS(4000, UNIT_10_MS)  /**< Determines supervision time-out in units of 10 milliseconds. */
 
-#define TARGET_DEV_NAME "Nordic_HRM" /**< Connect to a peripheral using a given advertising name here. */
+#define TARGET_DEV_NAME "Nordic_CHUN" /**< Connect to a peripheral using a given advertising name here. */
 #define MAX_PEER_COUNT 1            /**< Maximum number of peer's application intends to manage. */
 
 #define BLE_UUID_HEART_RATE_SERVICE          0x180D /**< Heart Rate service UUID. */
@@ -66,6 +73,8 @@ enum
 #define BLE_CCCD_NOTIFY                      0x01
 
 #define STRING_BUFFER_SIZE 50
+
+#define TEST_LEN 2000
 
 typedef struct
 {
@@ -387,6 +396,9 @@ static void on_data_length_update_response(const ble_gap_evt_t * const p_ble_gap
     printf("max_tx_octets: %d\n", p_ble_gap_evt->params.data_length_update.effective_params.max_tx_octets);
     printf("max_rx_octets: %d\n", p_ble_gap_evt->params.data_length_update.effective_params.max_rx_octets);
     fflush(stdout);
+
+    ble_gap_phys_t phys = {BLE_GAP_PHY_1MBPS, BLE_GAP_PHY_1MBPS};
+    sd_ble_gap_phy_update(m_adapter, m_connection_handle, &phys);
 }
 #endif
 
@@ -400,13 +412,35 @@ static void on_write_response(const ble_gattc_evt_t * const p_ble_gattc_evt)
 {
     printf("Received write response.\n");
     fflush(stdout);
-
     if (p_ble_gattc_evt->gatt_status != NRF_SUCCESS)
     {
         printf("Error. Write operation failed. Error code 0x%X\n", p_ble_gattc_evt->gatt_status);
         fflush(stdout);
     }
+
+    sd_ble_gattc_read(m_adapter, m_connection_handle, m_hrm_char_handle + 1, 0);
 }
+
+static void on_read_response(const ble_gattc_evt_t * const p_ble_gattc_evt)
+{
+    printf("Received read response.\n");
+    fflush(stdout);
+    printf("handle: %d\n", p_ble_gattc_evt->params.read_rsp.handle);
+    printf("offset: %d\n", p_ble_gattc_evt->params.read_rsp.offset);
+    printf("len: %d\n", p_ble_gattc_evt->params.read_rsp.len);
+    printf("%02x\n", p_ble_gattc_evt->params.read_rsp.data[0]);
+    printf("%02x\n", p_ble_gattc_evt->params.read_rsp.data[1]);
+    printf("%02x\n", p_ble_gattc_evt->params.read_rsp.data[2]);
+    printf("%02x\n", p_ble_gattc_evt->params.read_rsp.data[3]);
+    printf("%02x\n", p_ble_gattc_evt->params.read_rsp.data[4]);
+    printf("%02x\n", p_ble_gattc_evt->params.read_rsp.data[249]);
+    if (p_ble_gattc_evt->gatt_status != NRF_SUCCESS)
+    {
+        printf("Error. Read operation failed. Error code 0x%X\n", p_ble_gattc_evt->gatt_status);
+        fflush(stdout);
+    }
+}
+
 
 /**@brief Function called on BLE_GATTC_EVT_HVX event.
  *
@@ -419,6 +453,9 @@ static void on_hvx(const ble_gattc_evt_t * const p_ble_gattc_evt)
     if (p_ble_gattc_evt->params.hvx.handle >= m_hrm_char_handle ||
             p_ble_gattc_evt->params.hvx.handle <= m_hrm_cccd_handle) // Heart rate measurement.
     {
+
+
+
         // We know the heart rate reading is encoded as 2 bytes [flag, value].
         printf("Received heart rate measurement length: %d\n", p_ble_gattc_evt->params.hvx.len);
         printf("Received heart rate measurement: %d\n", p_ble_gattc_evt->params.hvx.data[1]);
@@ -429,6 +466,22 @@ static void on_hvx(const ble_gattc_evt_t * const p_ble_gattc_evt)
     }
 
     fflush(stdout);
+}
+
+static void on_test_speed(ble_evt_hdr_t * header, const ble_gattc_evt_t * const p_ble_gattc_evt){
+    SYSTEMTIME st;
+    GetSystemTime(&st);
+    uint8_t dSecond = p_ble_gattc_evt->params.hvx.data[2];
+    uint8_t dMilliseconds1 = p_ble_gattc_evt->params.hvx.data[3];
+    uint8_t dMilliseconds2 = p_ble_gattc_evt->params.hvx.data[4];
+
+    double timeDiff = (st.wSecond -dSecond) + (st.wMilliseconds - dMilliseconds1 * 10 - dMilliseconds2) / 1000.0;
+
+
+    printf("Event length: %d bytes\n", header->evt_len);
+    printf("Time: %d.%d%d\n", dSecond, dMilliseconds1, dMilliseconds2);
+    printf("Time difference: %f s\n", timeDiff);
+    printf("Speed: %f Mbps\n", header->evt_len * 8  / timeDiff / 1024 / 1024);
 }
 
 /**@brief Function called on BLE_GAP_EVT_CONN_PARAM_UPDATE_REQUEST event.
@@ -822,26 +875,42 @@ static uint32_t descr_discovery_start()
  */
 static uint32_t hrm_cccd_set(uint8_t value)
 {
-    ble_gattc_write_params_t write_params;
-    uint8_t                  cccd_value[2] = {value, 0};
+    // ble_gattc_write_params_t write_params;
+    // uint8_t                  cccd_value[2] = {value, 0};
+    //
+    // printf("Setting HRM CCCD\n");
+    // fflush(stdout);
+    //
+    // if (m_hrm_cccd_handle == 0)
+    // {
+    //     printf("Error. No CCCD handle has been found\n");
+    //     fflush(stdout);
+    //     return NRF_ERROR_INVALID_STATE;
+    // }
+    //
+    // write_params.handle = m_hrm_cccd_handle;
+    // write_params.len = 2;
+    // write_params.p_value = cccd_value;
+    // write_params.write_op = BLE_GATT_OP_WRITE_REQ;
+    // write_params.offset = 0;
 
-    printf("Setting HRM CCCD\n");
-    fflush(stdout);
 
-    if (m_hrm_cccd_handle == 0)
-    {
-        printf("Error. No CCCD handle has been found\n");
-        fflush(stdout);
-        return NRF_ERROR_INVALID_STATE;
+    // Reading/writing to the 64 byte characteristic
+    ble_gattc_write_params_t write_params2;
+    uint8_t                  test_value[TEST_LEN];
+    test_value[0] = value;
+    for ( uint16_t i = 0; i < TEST_LEN ; i++ ) {
+        test_value[i] = 68;
     }
+    write_params2.write_op  = BLE_GATT_OP_WRITE_REQ;
+    write_params2.flags     = BLE_GATT_EXEC_WRITE_FLAG_PREPARED_WRITE;
+    write_params2.handle    = m_hrm_char_handle + 1;
+    write_params2.offset    = 0;
+    write_params2.len = 21;
+    write_params2.p_value = test_value;
 
-    write_params.handle = m_hrm_cccd_handle;
-    write_params.len = 2;
-    write_params.p_value = cccd_value;
-    write_params.write_op = BLE_GATT_OP_WRITE_REQ;
-    write_params.offset = 0;
-
-    return sd_ble_gattc_write(m_adapter, m_connection_handle, &write_params);
+    return sd_ble_gattc_write(m_adapter, m_connection_handle, &write_params2);
+    // return sd_ble_gattc_read(m_adapter, m_connection_handle, m_hrm_char_handle+1, 0);
 }
 
 /**@brief Function for handling the Application's BLE Stack events.
@@ -896,8 +965,13 @@ static void ble_evt_dispatch(adapter_t * adapter, ble_evt_t * p_ble_evt)
             on_write_response(&(p_ble_evt->evt.gattc_evt));
             break;
 
+        case BLE_GATTC_EVT_READ_RSP:
+            on_read_response(&(p_ble_evt->evt.gattc_evt));
+            break;
+
         case BLE_GATTC_EVT_HVX:
             on_hvx(&(p_ble_evt->evt.gattc_evt));
+            on_test_speed(&(p_ble_evt->header), &(p_ble_evt->evt.gattc_evt));
             break;
 
         case BLE_GAP_EVT_CONN_PARAM_UPDATE_REQUEST:
@@ -919,6 +993,15 @@ static void ble_evt_dispatch(adapter_t * adapter, ble_evt_t * p_ble_evt)
         case BLE_GAP_EVT_DATA_LENGTH_UPDATE:
             printf("BLE_GAP_EVT_DATA_LENGTH_UPDATE.\n");
             on_data_length_update_response(&(p_ble_evt->evt.gap_evt));
+            break;
+
+        case BLE_GAP_EVT_PHY_UPDATE:
+            printf("BLE_GAP_EVT_PHY_UPDATE.\n");
+            printf("status %d\n", p_ble_evt->evt.gap_evt.params.phy_update.status);
+
+            printf("tx_phy: %d\n", p_ble_evt->evt.gap_evt.params.phy_update.tx_phy);
+            printf("rx_phy: %d\n", p_ble_evt->evt.gap_evt.params.phy_update.rx_phy);
+
             break;
 
     #endif
