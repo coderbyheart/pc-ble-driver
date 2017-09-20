@@ -904,7 +904,7 @@ static uint32_t hrm_cccd_set(uint8_t value)
     write_params2.flags     = BLE_GATT_EXEC_WRITE_FLAG_PREPARED_WRITE;
     write_params2.handle    = m_hrm_char_handle + 1;
     write_params2.offset    = 0;
-    write_params2.len = 21;
+    write_params2.len = 245;
     write_params2.p_value = test_value;
 
     return sd_ble_gattc_write(m_adapter, m_connection_handle, &write_params2);
