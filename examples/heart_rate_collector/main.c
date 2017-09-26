@@ -177,7 +177,15 @@ static void on_connected(const ble_gap_evt_t * const p_ble_gap_evt)
     m_connection_handle = p_ble_gap_evt->conn_handle;
     m_connection_is_in_progress = false;
 
-    service_discovery_start();
+    // service_discovery_start();
+	ble_gap_conn_sec_t p_conn_sec;
+    memset(&p_conn_sec, 0, sizeof(p_conn_sec));
+
+    printf("sd_ble_gap_conn_sec_get\n");
+    sd_ble_gap_conn_sec_get(m_adapter, m_connection_handle, &p_conn_sec);
+    printf("Security Mode %d Level %d\n", p_conn_sec.sec_mode.sm,  p_conn_sec.sec_mode.lv);
+    printf("Encr key size: %d\n", p_conn_sec.encr_key_size);
+
 }
 
 /**@brief Function called on BLE_GAP_EVT_ADV_REPORT event.
@@ -901,6 +909,7 @@ int main(int argc, char * argv[])
     char *   serial_port;
     uint8_t  cccd_value = 0;
 
+    char c = (char)getchar();
     if (argc > 1)
     {
         serial_port = argv[1];
